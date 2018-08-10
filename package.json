@@ -1,0 +1,23 @@
+{
+  "name": "node-statsd",
+  "version": "0.0.1",
+  "description": "Another statsd information-server",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@gitlab.com/guppy0130/node-statsd.git"
+  },
+  "author": "guppy0130",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://gitlab.com/guppy0130/node-statsd/issues"
+  },
+  "homepage": "https://gitlab.com/guppy0130/node-statsd#README",
+  "dependencies": {
+    "datagram-stream": "^1.1.1",
+    "systeminformation": "^3.42.9"
+  }
+}
