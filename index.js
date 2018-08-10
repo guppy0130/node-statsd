@@ -10,14 +10,14 @@ const port = 4242;
  * @param {string|string[]} message - the message(s) to send
  */
 const sendMessage = (message) => {
-	if (Array.isArray(message)) {
-		message = message.join('\n');
-	}
+    if (Array.isArray(message)) {
+        message = message.join('\n');
+    }
 
-	udp.send(message, port, address, (err) => {
-		console.log(err);
-		udp.close();
-	});
+    udp.send(message, port, address, (err) => {
+        console.log(err);
+        udp.close();
+    });
 };
 
 /**
@@ -28,10 +28,10 @@ const sendMessage = (message) => {
  * @return {string} statsd-ready string
  */
 const statsdFormat = (metric, value, type) => {
-	const allowedMetrics = ['c', 's', 'g', 'ms'];
-	if (!allowedMetrics.includes(type)) {
-		throw new Error(`type ${type} is not a statsd metric`);
-	}
-	
-	return `${metric}:${value}|${type}`;
+    const allowedMetrics = ['c', 's', 'g', 'ms'];
+    if (!allowedMetrics.includes(type)) {
+        throw new Error(`type ${type} is not a statsd metric`);
+    }
+
+    return `${metric}:${value}|${type}`;
 };
