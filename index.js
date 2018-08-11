@@ -3,7 +3,6 @@ const dgram = require('dgram');
 const udp = dgram.createSocket('udp4');
 const service = require('os-service');
 const os = require('os');
-const colors = require('colors/safe');
 const hostname = os.hostname();
 
 const address = '192.168.1.128';        // statsd address
@@ -74,13 +73,13 @@ const run = () => {
         }).join('.');
 
         if (debug) {
-            //console.log(`[${(new Date).toLocaleString()}] ${metric}.${tags}:${value}|${type}`);
-//            console.table({
-//                metric: metric,
-//                tags: tags,
-//                value: value,
-//                type: type
-//            });
+            console.log(`[${(new Date).toLocaleString()}] ${metric}.${tags}:${value}|${type}`);
+            //console.table({
+            //    metric: metric,
+            //    tags: tags,
+            //    value: value,
+            //    type: type
+            //});
         }
         return `${metric}.${tags}:${value}|${type}`;
     };
@@ -196,7 +195,6 @@ const run = () => {
                 } else {
                     value = calc;
                 }
-                console.log(value);
                 send(statsdFormat('disk_usage', value, 'g', [
                     tag('type', device.type), 
                     tag('mount', mount), 
@@ -216,17 +214,14 @@ const run = () => {
                 ['vendor', 'releaseDate'],
                 ['model', 'version'],
                 ['platform', 'arch', 'distro', 'release'],
-                ['kernel', 'openssl', 'node', 'npm', 'yarn', 'gulp', 'git', 'mongodb']
+                ['kernel', 'openssl', 'node', 'npm', 'gulp', 'git', 'mongodb']
             ];
             
             l1.forEach((l1Elem, index) => {
                 l2[index].forEach((l2Elem) => {
-                    console.log(l1Elem, l2Elem);
-                    //send(
-                    console.log(
+                    send(
                         statsdFormat('info', data[l1Elem][l2Elem].replace(/\./g, '-').replace(/ /g, '-'), 'g', [tag(l1Elem, l2Elem)])
                     );
-                    //);
                 });
             });
             
@@ -245,6 +240,27 @@ const run = () => {
         });
     };
     
+    let battery = -1;
+    /**
+     * get battery stats
+     */
+    const getBattery = () => {
+        si.battery(data => {
+            if (!data.hasbattery) {
+                return;
+            } else if (battery === -1) {
+                send(statsdFormat('battery', data.percent, 'g'));
+                battery = data.percent;
+                return;
+            }
+            let value = data.percent - battery;
+            if (value >= 0) {
+                value = `+${value}`;
+            }
+            send(statsdFormat('battery', value, 'g'));
+        });
+    };
+
     debug = true;
     
     /**
@@ -262,6 +278,7 @@ const run = () => {
     const getMedFreq = () => {
         getLatency();
         getDiskUsage();
+        getBattery();
     };
     
     /**
@@ -272,12 +289,24 @@ const run = () => {
     };
     
     /**
-     * get/send information at intervals of 1, 100
+     * get/send information at intervals of 1, 10
      */
     setInterval(getHighFreq, interval);
     setInterval(getMedFreq, interval * 10);
     getMedFreq();
     getNoFreq();
+
+    /**
+     * every so often, re-send gauge values instead of deltas
+     */
+    const sendRaw = () => {
+        battery = -1;
+        latency = -1;
+        disks = {};
+        getMedFreq();
+    };
+
+    setInterval(sendRaw, interval * 100);
 };
 
 /**
