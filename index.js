@@ -229,10 +229,29 @@ const run = () => {
         });
     };
 
+    /**
+     * gets uptime
+     */
     const getUptime = () => {
         send(statsdFormat('uptime', si.time().uptime, 'c'));
     };
     
+    /**
+     * get disk i/o
+     */
+    const getDiskIO = async () => {
+        let {platform} = await si.osInfo();
+        if (platform === 'Windows') {
+            return;
+        }
+        si.disksIO(data => {
+            let rio = data.rIO_sec;
+            let wio = data.wIO_sec;
+            send(statsdFormat('diskio', rio, 'c', [tag('direction', 'read')]));
+            send(statsdFormat('diskio', wio, 'c', [tag('direction', 'write')]));
+        });
+    };
+
     /**
      * convenience function for high frequency data
      */
@@ -241,6 +260,7 @@ const run = () => {
         getMemory();
         getNetworkUse();
         getUptime();
+        getDiskIO();
     };
     
     /**
