@@ -9,8 +9,8 @@ const address = '192.168.1.128';        // statsd address
 const port = 8125;                      // statsd port
 const prefix = '_t_';                   // prefix to be used with statsd-opentsdb-backend
 const interval = 1000;                  // interval in ms
+const debug = false;                     // enable when debugging
 
-let debug = process.env.PRODUCTION == 'true';
 process.chdir(__dirname);
 
 const run = () => {
@@ -21,9 +21,16 @@ const run = () => {
      * @return tag object
      */
     const tag = (tag, value) => {
+        const format = (input) => {
+            if (typeof input === 'string') {
+                return input.replace(/\./g, '-').replace(/ /g, '-');
+            }
+            return input;
+        };
+
         return {
-            tag: tag,
-            value: value
+            tag: format(tag),
+            value: format(value)
         };
     };
 
@@ -36,11 +43,16 @@ const run = () => {
             message = message.join('\n');
         }
         
-        udp.send(message, port, address, (err) => {
-            if (err) {
-                console.log(err);
-            }
-        });
+
+        if (!debug) {
+            udp.send(message, port, address, (err) => {
+                if (err) {
+                    console.log(err);
+                }
+            });
+        } else {
+            console.log(message);
+        }
     };
 
     /**
@@ -59,7 +71,7 @@ const run = () => {
          * perform type check
          */
         if (!allowedMetrics.includes(type)) {
-            throw new Error(`${type} is not a statsd metric type (one of 'c', 's', 'ms', or 'g')`);
+            throw new Error(`${JSON.stringify(type)} is not a statsd metric type (one of 'c', 's', 'ms', or 'g')`);
         }
 
         /**
@@ -72,15 +84,6 @@ const run = () => {
             return `${prefix}${elem.tag}.${elem.value}`;
         }).join('.');
 
-        if (debug) {
-            console.log(`[${(new Date).toLocaleString()}] ${metric}.${tags}:${value}|${type}`);
-            //console.table({
-            //    metric: metric,
-            //    tags: tags,
-            //    value: value,
-            //    type: type
-            //});
-        }
         return `${metric}.${tags}:${value}|${type}`;
     };
 
@@ -204,42 +207,7 @@ const run = () => {
             });
         });
     };
-    
-    const getInfo = () => {
-        si.getStaticData(data => {
-            const {graphics, memLayout} = data;
-            const l1 = ['system', 'bios', 'baseboard', 'os', 'versions'];
-            const l2 = [
-                ['model'],
-                ['vendor', 'releaseDate'],
-                ['model', 'version'],
-                ['platform', 'arch', 'distro', 'release'],
-                ['kernel', 'openssl', 'node', 'npm', 'gulp', 'git', 'mongodb']
-            ];
-            
-            l1.forEach((l1Elem, index) => {
-                l2[index].forEach((l2Elem) => {
-                    send(
-                        statsdFormat('info', data[l1Elem][l2Elem].replace(/\./g, '-').replace(/ /g, '-'), 'g', [tag(l1Elem, l2Elem)])
-                    );
-                });
-            });
-            
-            graphics.controllers.forEach(gpu => {
-                statsdFormat('info', gpu.model, 'g', [tag('graphics', 'model')]);
-                statsdFormat('info', gpu.vendor, 'g', [tag('graphics', 'vendor')]);
-                statsdFormat('info', gpu.bus, 'g', [tag('graphics', 'bus')]);
-                statsdFormat('info', gpu.vram, 'g', [tag('graphics', 'vram')]);
-            });
-            
-            memLayout.forEach(stick => {
-                statsdFormat('info', stick.clockSpeed, 'g', [tag('memLayout', 'clockSpeed')]);
-                statsdFormat('info', stick.voltageConfigured, 'g', [tag('memLayout', 'voltageConfigured')]);
-                statsdFormat('info', stick.bank, 'g', [tag('memLayout', 'bank')]);
-            });
-        });
-    };
-    
+
     let battery = -1;
     /**
      * get battery stats
@@ -261,7 +229,9 @@ const run = () => {
         });
     };
 
-    debug = true;
+    const getUptime = () => {
+        send(statsdFormat('uptime', si.time().uptime, 'c'));
+    };
     
     /**
      * convenience function for high frequency data
@@ -270,6 +240,7 @@ const run = () => {
         getCpuUsage();
         getMemory();
         getNetworkUse();
+        getUptime();
     };
     
     /**
@@ -280,21 +251,13 @@ const run = () => {
         getDiskUsage();
         getBattery();
     };
-    
-    /**
-     * for run-once functions
-     */
-    const getNoFreq = () => {
-        getInfo();
-    };
-    
+
     /**
      * get/send information at intervals of 1, 10
      */
     setInterval(getHighFreq, interval);
     setInterval(getMedFreq, interval * 10);
     getMedFreq();
-    getNoFreq();
 
     /**
      * every so often, re-send gauge values instead of deltas
