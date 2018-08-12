@@ -241,7 +241,7 @@ const run = () => {
      */
     const getDiskIO = async () => {
         let {platform} = await si.osInfo();
-        if (platform === 'Windows') {
+        if (platform === 'win32') {
             return;
         }
         si.disksIO(data => {
