@@ -112,19 +112,12 @@ const run = () => {
     const getMemory = () => {
         si.mem()
             .then(data => {
-                let total = data.total;
-                let swapTotal = data.swaptotal;
-
-                let mem = ['free', 'used', 'active'],
-                    swap = ['free', 'used'];
-
-                let arr = mem.map(elem => {
-                    return statsdFormat('ram', Math.round(data[elem] / total * 10000) / 10000, 'c', [tag('memory', elem)]);
-                }).concat(
-                    swap.map(elem => {
-                        return statsdFormat('swap', Math.round(data[`swap${elem}`] / swapTotal * 10000) / 10000, 'c', [tag('memory', elem)]);
-                    })
-                );
+                let arr = [],
+                    free = data['free'],
+                    total = data['total'],
+                    used = total - free;
+                arr.push(statsdFormat('ram', free / total, 'c', [tag('memory', 'free')]));
+                arr.push(statsdFormat('ram', used / total, 'c', [tag('memory', 'used')]));
 
                 send(arr);
             })
