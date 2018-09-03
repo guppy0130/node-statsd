@@ -2,16 +2,14 @@ const si = require('systeminformation');
 const dgram = require('dgram');
 const udp = dgram.createSocket('udp4');
 const service = require('os-service');
-const freemem = require('free-memory');
 const os = require('os');
 const hostname = os.hostname();
-const platform = os.platform();
 
 const address = '192.168.1.128';        // statsd address
 const port = 8125;                      // statsd port
 const prefix = '_t_';                   // prefix to be used with statsd-opentsdb-backend
 const interval = 1000;                  // interval in ms
-const debug = true;                     // enable when debugging
+const debug = false;                     // enable when debugging
 
 process.chdir(__dirname);
 
@@ -44,7 +42,7 @@ const run = () => {
         if (Array.isArray(message)) {
             message = message.join('\n');
         }
-
+        
 
         if (!debug) {
             udp.send(message, port, address, (err) => {
@@ -68,7 +66,7 @@ const run = () => {
     const statsdFormat = (metric, value, type, moreTags) => {
         const allowedMetrics = ['c', 's', 'g', 'ms'];
         let tags;
-
+        
         /**
          * perform type check
          */
@@ -108,43 +106,26 @@ const run = () => {
 
     /**
      * get the current memory use and sends it
-     * uses output from free on linux instead of output from si.mem()
-     * tags with 'free', 'used'
+     * wants two metrics: ram + swap
+     * tags with 'free', 'used', or 'active' depending on if it's appropriate
      */
-    const getMemory = async () => {
-        let arr = [],
-            free, total, used;
-
-        if (platform === 'linux') {
-            freemem((err, info) => {
-                if (!err) {
-                    arr = [],
-                    free = info.mem.usable,
-                    total = info.mem.total,
-                    used = total - free;
-                }
-            });
-        } else {
-            await si.mem()
-                .then(data => {
-                    arr = [],
+    const getMemory = () => {
+        si.mem()
+            .then(data => {
+                let arr = [],
                     free = data['free'],
                     total = data['total'],
                     used = total - free;
-                })
-                .catch(err => {
-                    throw err;
-                });
-        }
+                arr.push(statsdFormat('ram', free / total, 'c', [tag('memory', 'free')]));
+                arr.push(statsdFormat('ram', used / total, 'c', [tag('memory', 'used')]));
 
-        if (free > 0 && used > 0 && total > 0) {
-            arr.push(statsdFormat('ram', free / total, 'c', [tag('memory', 'free')]));
-            arr.push(statsdFormat('ram', used / total, 'c', [tag('memory', 'used')]));
-
-            send(arr);
-        }
+                send(arr);
+            })
+            .catch(err => {
+                throw err;
+            });
     };
-
+    
     /**
      * gets current network use and sends it
      * tags with 'direction' (rx/tx) and 'interface'
@@ -170,7 +151,7 @@ const run = () => {
                 throw err;
             });
     };
-
+    
     let latency = -1;
     /**
      * gets the network latency to 8.8.8.8 and sends it
@@ -180,7 +161,7 @@ const run = () => {
         if (latency === -1) {
             send(statsdFormat('latency', 0, 'g'));
         }
-
+        
         si.inetLatency(ms => {
             let value = ms - latency;
             if (value >= 0) {
@@ -190,7 +171,7 @@ const run = () => {
             latency = ms;
         });
     };
-
+    
     let disks = {};
     /**
      * disk usage/capacity
@@ -201,7 +182,7 @@ const run = () => {
                 let calc = Math.round(device.use * 1000) / 1000;
                 let mount = device.mount.replace(':', '');
                 let value;
-
+                
                 if (disks[mount] !== undefined) {
                     value = disks[mount] - calc;
                     if (value >= 0) {
@@ -211,8 +192,8 @@ const run = () => {
                     value = calc;
                 }
                 send(statsdFormat('disk_usage', value, 'g', [
-                    tag('type', device.type),
-                    tag('mount', mount),
+                    tag('type', device.type), 
+                    tag('mount', mount), 
                     tag('fs', device.fs.replace(':', ''))
                 ]));
                 disks[mount] = calc;
@@ -247,7 +228,7 @@ const run = () => {
     const getUptime = () => {
         send(statsdFormat('uptime', si.time().uptime, 'c'));
     };
-
+    
     /**
      * get disk i/o
      */
@@ -274,7 +255,7 @@ const run = () => {
         getUptime();
         getDiskIO();
     };
-
+    
     /**
      * convenience function for fx's that aren't as often used
      */
